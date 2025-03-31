@@ -51,8 +51,6 @@ export const getListProduct = async (req: Request, res: Response) => {
         },
       }
     );
-
-    console.log("✅ PayPal Plans:", response.data);
     res.status(200).json(response.data); // ✅ Return plans to frontend
     return;
   } catch (error: any) {
@@ -79,6 +77,7 @@ export const getSubsDetail = async (req: Request, res: Response) => {
 
     console.log(`✅ PayPal Plan (${planID}):`, response.data);
     res.status(200).json(response.data);
+    return;
   } catch (error: any) {
     console.error(
       "❌ Error fetching PayPal Plans:",
@@ -94,33 +93,33 @@ export const createSubscription = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { user_email } = req.body; // ✅ Get user email from body
-    const plan_id = req.params.id; // ✅ Get plan_id from URL param
+    const accessToken = await getAccessToken();
+    const { user_email } = req.body; // ✅ Extract user email from request
+    const plan_id = req.params.id; // ✅ Get plan ID from URL parameter
 
-    // ✅ Step 1: Get PayPal Access Token
-    const tokenResponse = await axios.post(
-      `${BASE_URL}/v1/oauth2/token`,
-      "grant_type=client_credentials",
-      {
-        auth: {
-          username: process.env.PAYPAL_CLIENT_ID!,
-          password: process.env.PAYPAL_SECRET!,
+    // ✅ Step 1: Check if the Plan ID exists using getSubsDetail
+    try {
+      await axios.get(`${BASE_URL}/v1/billing/plans/${plan_id}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
         },
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      }
-    );
-
-    const accessToken = tokenResponse.data.access_token;
+      });
+    } catch (error) {
+      res.status(404).json({ error: "Plan not found" });
+      return; // ❌ Plan ID does not exist
+    }
 
     // ✅ Step 2: Create Subscription in PayPal
     const paypalResponse = await axios.post(
-      `${BASE_URL}/v1/billing/subscriptions`,
+      `${BASE_URL}/v1/billing/subscriptions`, // ✅ Correct endpoint
       {
         plan_id,
         subscriber: { email_address: user_email },
         application_context: {
-          return_url: `${process.env.BASE_URL}/complete-payment`,
-          cancel_url: `${process.env.BASE_URL}/cancel-payment`,
+          return_url: `${BASE_URL}/complete-payment`,
+          cancel_url: `${BASE_URL}/cancel-payment`,
         },
       },
       {
@@ -146,16 +145,26 @@ export const createSubscription = async (
 
     if (error) throw error;
 
+    // ✅ Step 4: Extract approval URL for frontend
+    const approval_url = paypalResponse.data.links.find(
+      (l: any) => l.rel === "approve"
+    )?.href;
+
+    if (!approval_url) throw new Error("Approval URL not found");
+
+    console.log("✅ Subscription created:", paypalResponse.data);
+
     res.status(200).json({
       message: "✅ Subscription created",
       subscription_id: subscriptionId,
-      approval_url: paypalResponse.data.links.find(
-        (l: any) => l.rel === "approve"
-      )?.href,
+      approval_url, // ✅ Send this to the frontend
     });
     return;
-  } catch (error) {
-    console.error("❌ Error creating subscription:", error);
+  } catch (error: any) {
+    console.error(
+      "❌ Error creating subscription:",
+      error.response?.data || error.message
+    );
     res.status(500).json({ error: "Subscription creation failed" });
     return;
   }
