@@ -99,7 +99,7 @@ export const createSubscription = async (
 
     // ✅ Step 1: Get PayPal Access Token
     const tokenResponse = await axios.post(
-      `${process.env.PAYPAL_BASE_URL}/v1/oauth2/token`,
+      `${BASE_URL}/v1/oauth2/token`,
       "grant_type=client_credentials",
       {
         auth: {
