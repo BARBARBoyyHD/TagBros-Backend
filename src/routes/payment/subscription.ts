@@ -114,7 +114,7 @@ export const createSubscription = async (
 
     // ✅ Step 2: Create Subscription in PayPal
     const paypalResponse = await axios.post(
-      `${process.env.PAYPAL_BASE_URL}/v1/billing/subscriptions`,
+      `${BASE_URL}/v1/billing/subscriptions`,
       {
         plan_id,
         subscriber: { email_address: user_email },
