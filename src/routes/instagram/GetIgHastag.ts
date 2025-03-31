@@ -3,6 +3,6 @@ import { getIgHashtags } from "../../controllers/instagram/GetIgHastagsControlle
 
 const route = Router();
 
-route.post("/get/ig/hashtag", getIgHashtags); // Use POST for security
+route.post("/api/get/ig/hashtag", getIgHashtags); // Use POST for security
 
 export default route;

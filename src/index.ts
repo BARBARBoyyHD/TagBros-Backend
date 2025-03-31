@@ -29,7 +29,7 @@ app.post("/api/payment/paypal/capturepayment/:orderID", capturePayment);
 app.get("/api/paypal/product/list",getListProduct)
 app.get("/api/subs/detail/:id",getSubsDetail)
 
-app.post("/get/ig/hashtag", GetIgHastags);
+app.post("/api/get/ig/hashtag", GetIgHastags);
 
 app.listen(port, () => {
     console.log(`http://localhost:${port}`);
