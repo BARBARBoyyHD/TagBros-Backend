@@ -15,7 +15,7 @@ export const webHook = async (req: Request, res: Response) => {
       console.log("❌ Subscription Cancelled:", event.resource.id);
       // Downgrade user or disable pro features
     }
-    res.sendStatus(200); // PayPal requires a 200 response
+    res.status(200).json({ message: "✅ Webhook received successfully", event });
     return;
   } catch (error) {
     console.error("❌ Webhook Error:", error);
