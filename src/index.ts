@@ -3,7 +3,7 @@ dotenv.config();
 import express from "express";
 import GetIgHastags from "./routes/instagram/GetIgHastag";
 import { createOrder, capturePayment } from "./routes/payment/paypal"; // ✅ Import functions directly
-import { getListProduct,getSubsDetail,createSubscription } from "./routes/payment/subscription";
+import { getListProduct,getSubsDetail,createSubscription,activateSubscription } from "./routes/payment/subscription";
 import { webHook } from "./routes/payment/webHook";
 
 import cors from "cors";
@@ -30,6 +30,7 @@ app.post("/api/payment/paypal/capturepayment/:orderID", capturePayment);
 app.post("/api/get/ig/hashtag", GetIgHastags);
 app.post("/webhook/paypal",webHook)
 app.post("/api/subscriptions/plans/:id",createSubscription)
+app.post("/api/activate-subscription", activateSubscription);
 
 app.get("/api/paypal/product/list",getListProduct)
 app.get("/api/subs/detail/:id",getSubsDetail)

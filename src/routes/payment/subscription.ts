@@ -88,32 +88,43 @@ export const getSubsDetail = async (req: Request, res: Response) => {
   }
 };
 
+export const fetchSubscriptionDetails = async (subscription_id: string) => {
+  try {
+    const accessToken = await getAccessToken();
+
+    const response = await axios.get(
+      `${BASE_URL}/v1/billing/subscriptions/${subscription_id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log("📌 Subscription Details:", response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error(
+      "❌ Error fetching subscription details:",
+      error.response?.data || error.message
+    );
+    throw new Error(error.response?.data?.error_description || error.message);
+  }
+};
+
 export const createSubscription = async (
   req: Request,
   res: Response
 ): Promise<void> => {
   try {
     const accessToken = await getAccessToken();
-    const { user_email } = req.body; // ✅ Extract user email from request
-    const plan_id = req.params.id; // ✅ Get plan ID from URL parameter
+    const { user_email } = req.body;
+    const plan_id = req.params.id;
 
-    // ✅ Step 1: Check if the Plan ID exists using getSubsDetail
-    try {
-      await axios.get(`${BASE_URL}/v1/billing/plans/${plan_id}`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-      });
-    } catch (error) {
-      res.status(404).json({ error: "Plan not found" });
-      return; // ❌ Plan ID does not exist
-    }
-
-    // ✅ Step 2: Create Subscription in PayPal
+    // ✅ Step 1: Create Subscription in PayPal
     const paypalResponse = await axios.post(
-      `${BASE_URL}/v1/billing/subscriptions`, // ✅ Correct endpoint
+      `${BASE_URL}/v1/billing/subscriptions`,
       {
         plan_id,
         subscriber: { email_address: user_email },
@@ -130,35 +141,34 @@ export const createSubscription = async (
       }
     );
 
-    const subscriptionId = paypalResponse.data.id;
+    const subscription_id = paypalResponse.data.id;
+
+    // ✅ Step 2: Fetch Subscription Details
+    const subscriptionDetails = await fetchSubscriptionDetails(subscription_id);
 
     // ✅ Step 3: Insert Subscription into Supabase
     const { error } = await supabase.from("subscriptions").insert([
       {
-        id: subscriptionId,
+        id: subscription_id,
         user_email,
         plan_id,
-        status: "PENDING",
-        start_date: new Date().toISOString(),
+        status: subscriptionDetails.status || "PENDING",
+        start_date: subscriptionDetails.start_time || new Date().toISOString(),
       },
     ]);
 
     if (error) throw error;
 
-    // ✅ Step 4: Extract approval URL for frontend
     const approval_url = paypalResponse.data.links.find(
       (l: any) => l.rel === "approve"
     )?.href;
 
-    if (!approval_url) throw new Error("Approval URL not found");
-
-    console.log("✅ Subscription created:", paypalResponse.data);
-
     res.status(200).json({
       message: "✅ Subscription created",
-      subscription_id: subscriptionId,
-      approval_url, // ✅ Send this to the frontend
+      subscription_id,
+      approval_url,
     });
+
     return;
   } catch (error: any) {
     console.error(
@@ -166,6 +176,72 @@ export const createSubscription = async (
       error.response?.data || error.message
     );
     res.status(500).json({ error: "Subscription creation failed" });
+    return;
+  }
+};
+
+export const activateSubscription = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const { subscription_id } = req.body;
+
+    if (!subscription_id) {
+      res.status(400).json({ error: "Subscription ID is required" });
+      return;
+    }
+
+    // ✅ Get PayPal Access Token
+    const accessToken = await getAccessToken();
+
+    // ✅ Fetch Subscription Details
+    const response = await axios.get(
+      `${BASE_URL}/v1/billing/subscriptions/${subscription_id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const subscription = response.data;
+    console.log("✅ Subscription Details:", subscription);
+
+    // ✅ Check if the subscription is still in "APPROVAL_PENDING"
+    if (subscription.status === "APPROVAL_PENDING") {
+      // ✅ Activate the subscription
+      await axios.post(
+        `${BASE_URL}/v1/billing/subscriptions/${subscription_id}/activate`,
+        { reason: "User approved the subscription." },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      console.log("✅ Subscription activated:", subscription_id);
+    }
+
+    // ✅ Save to database
+    const { error } = await supabase
+      .from("subscriptions")
+      .update({ status: "ACTIVE" })
+      .eq("id", subscription_id);
+
+    if (error) throw error;
+
+    res.status(200).json({ message: "✅ Subscription activated" });
+    return;
+  } catch (error: any) {
+    console.error(
+      "❌ Error activating subscription:",
+      error.response?.data || error.message
+    );
+    res.status(500).json({ error: "Failed to activate subscription" });
     return;
   }
 };
